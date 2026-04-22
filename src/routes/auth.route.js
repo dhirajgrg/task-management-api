@@ -13,7 +13,8 @@ const router = Router();
 
 router.post("/signup", registerValidator, validate, signup);
 router.post("/login", login);
-router.post("/logout", logout);
+router.post("/logout", protect, logout);
 router.get("/me", protect, getMe);
 
 export default router;
+``;

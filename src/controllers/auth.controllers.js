@@ -39,7 +39,7 @@ export const login = catchAsync(async (req, res, next) => {
     return next(new AppError("please provide email and password", 400));
   }
   const user = await User.findOne({ email }).select("+password");
-  
+
   if (!user || !(await user.comparePassword(password))) {
     return next(new AppError("invalid email or password", 401));
   }
@@ -63,6 +63,7 @@ export const login = catchAsync(async (req, res, next) => {
 });
 
 export const logout = (req, res) => {
+  
   res.clearCookie("token");
   res.status(200).json({
     status: "success",

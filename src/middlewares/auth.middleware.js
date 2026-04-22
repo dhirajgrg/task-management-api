@@ -32,8 +32,8 @@ export const protect = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "the user belonging to this token does no longer exist",
-        401,
-      ),
+        401
+      )
     );
   }
   if (currentUser.changedPasswordAfter(decoded.iat)) {

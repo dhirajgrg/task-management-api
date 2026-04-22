@@ -52,8 +52,8 @@ userSchema.pre("save", async function () {
 });
 
 //=============== password changed timestamp==============
-userSchema.pre("save", function (next) {
-  if (!this.isModified("password") || this.isNew) return next();
+userSchema.pre("save", function () {
+  if (!this.isModified("password") || this.isNew) return;
 
   this.passwordChangedAt = Date.now() - 1000;
 });
@@ -72,7 +72,7 @@ userSchema.methods.generatePasswordResetToken = function () {
 
 //==================compare timestamp==========
 userSchema.methods.changedPasswordAfter = function (JWTTimestamps) {
-  if (!passwordChangedAt) return false;
+  if (!this.passwordChangedAt) return false;
   const passwordChangedTimestamp = parseInt(
     this.passwordChangedAt.getTime() / 1000,
   );
