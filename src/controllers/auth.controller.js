@@ -72,6 +72,7 @@ export const logout = (req, res) => {
 };
 
 export const getMe = (req, res) => {
+  // console.log('======== : ',req.user)
   const user = req.user;
   res.status(200).json({
     status: "success",
