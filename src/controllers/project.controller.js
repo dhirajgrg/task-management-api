@@ -29,9 +29,10 @@ export const createProject = catchAsync(async (req, res, next) => {
 
 // ─── Get All Projects ──────────────────────────────────────────────────────────
 export const allProjects = catchAsync(async (req, res, next) => {
-  const projects = await Project.find();
+  const projects = await Project.find()
+    .select("name members")
+    .populate({ path: "members", select: "name" });
 
-  // Fix: .find() never returns null — check .length instead
   if (!projects.length) {
     return next(new AppError("No projects found", 404));
   }
@@ -50,11 +51,9 @@ export const allProjects = catchAsync(async (req, res, next) => {
 export const singleProject = catchAsync(async (req, res, next) => {
   const { id } = req.params;
 
-  // Fix: validate ObjectId format to prevent Mongoose CastError crash
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return next(new AppError("Invalid project ID", 400));
   }
-
 
   const project = await Project.findById(id);
 
@@ -75,21 +74,30 @@ export const singleProject = catchAsync(async (req, res, next) => {
 export const updateProject = catchAsync(async (req, res, next) => {
   const { name, description } = req.body;
 
+  if (!name || !description) {
+    return next(new AppError("provide name and description", 400));
+  }
 
-  const updates = {};
-  if (name) updates.name = name;
-  if (description) updates.description = description;
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return next(new AppError("Invalid project Id", 400));
+  }
 
-
-  const project = await Project.findByIdAndUpdate(
-    req.params.id,
-    { $set: updates },
-    { new: true },
-  );
+  const project = await Project.findById(req.params.id);
 
   if (!project) {
     return next(new AppError("Project not found", 404));
   }
+
+  if (!project.owner.equals(req.user._id)) {
+    return next(
+      new AppError("You are not authorized to update this project", 403),
+    );
+  }
+
+  project.name = name;
+  project.description = description;
+
+  await project.save();
 
   res.status(200).json({
     status: "success",
@@ -102,15 +110,125 @@ export const updateProject = catchAsync(async (req, res, next) => {
 
 // ─── Delete Project ────────────────────────────────────────────────────────────
 export const deleteProject = catchAsync(async (req, res, next) => {
-  const project = await Project.findByIdAndDelete(req.params.id);
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return next(new AppError("Invalid project ID", 400));
+  }
 
+  const project = await Project.findById(req.params.id);
 
   if (!project) {
     return next(new AppError("Project not found", 404));
   }
 
+  if (!project.owner.equals(req.user._id)) {
+    return next(
+      new AppError("You are not authorized to delete this project", 403),
+    );
+  }
+
+  await project.deleteOne();
+
   res.status(200).json({
     status: "success",
     message: "Project deleted successfully",
+  });
+});
+
+// ─── Add Member ────────────────────────────────────────────────────────────────
+export const addMember = catchAsync(async (req, res, next) => {
+  const { userId } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return next(new AppError("Please provide a valid user ID", 400));
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return next(new AppError("Invalid project ID", 400));
+  }
+
+  const project = await Project.findById(req.params.id);
+
+  if (!project) {
+    return next(new AppError("Project not found", 404));
+  }
+
+  if (project.members.includes(userId)) {
+    return next(new AppError("User is already a member", 400));
+  }
+
+  if (!project.owner.equals(req.user._id)) {
+    return next(
+      new AppError(
+        "You are not authorized to add members to this project",
+        403,
+      ),
+    );
+  }
+
+  project.members.push(userId);
+  await project.save();
+
+  res.status(200).json({
+    status: "success",
+    message: "Member added to project successfully",
+    data: {
+      project,
+    },
+  });
+});
+
+// ─── All Members ───────────────────────────────────────────────────────────────
+export const allMember = catchAsync(async (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return next(new AppError("Invalid project ID", 400));
+  }
+
+  const project = await Project.findById(req.params.id).populate({
+    path: "members",
+    select: "name",
+  });
+
+  if (!project) return next(new AppError("Project not found", 404));
+
+  res.status(200).json({
+    status: "success",
+    message: "Fetched members successfully",
+    data: {
+      members: project.members,
+    },
+  });
+});
+
+// ─── Remove Member ─────────────────────────────────────────────────────────────
+export const removeMember = catchAsync(async (req, res, next) => {
+  const { id, userId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return next(new AppError("Invalid project ID", 400));
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return next(new AppError("Invalid user ID", 400));
+  }
+
+  const project = await Project.findById(id);
+
+  if (!project) {
+    return next(new AppError("Project not found", 404));
+  }
+
+  if (!project.owner.equals(req.user._id)) {
+    return next(new AppError("You are not authorized to remove members", 403));
+  }
+
+  project.members = project.members.filter((member) => !member.equals(userId));
+  await project.save();
+
+  res.status(200).json({
+    status: "success",
+    message: "Member removed successfully",
+    data: {
+      members: project.members,
+    },
   });
 });
